@@ -3,44 +3,135 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TikTok & Instagram Downloader</title>
+  <title>TikTok & Instagram Downloader HD</title>
   <style>
-    body { font-family: sans-serif; text-align: center; margin-top: 50px; }
-    input, button { padding: 10px; width: 80%; max-width: 400px; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      text-align: center;
+      background: #f7f7f7;
+      padding: 30px;
+    }
+    h1 { color: #222; }
+    input {
+      width: 80%;
+      max-width: 450px;
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    button {
+      padding: 10px 20px;
+      margin-top: 12px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      background: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover { background: #0056b3; }
+    select {
+      padding: 8px;
+      font-size: 16px;
+      border-radius: 8px;
+      margin-top: 10px;
+    }
+    #result { margin-top: 20px; }
+    video {
+      width: 90%;
+      max-width: 400px;
+      border-radius: 10px;
+      margin-top: 15px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    a.download-btn {
+      display: inline-block;
+      margin-top: 12px;
+      background: #28a745;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 8px;
+      text-decoration: none;
+    }
+    a.download-btn:hover { background: #218838; }
   </style>
 </head>
 <body>
-  <h2>Downloader TikTok & Instagram</h2>
-  <input id="url" placeholder="Tempelkan link di sini" />
-  <button onclick="download()">Download</button>
+  <h1>Downloader Video TikTok & Instagram (HD & 4K)</h1>
+  <p>Tempelkan link TikTok atau Instagram di bawah ini, pilih kualitas, lalu tekan tombol <b>Download</b>.</p>
+
+  <input id="url" placeholder="Tempelkan link di sini..." />
+  <br>
+  <select id="quality">
+    <option value="normal">Kualitas Standar</option>
+    <option value="hd">Kualitas HD (1080p)</option>
+    <option value="4k">Kualitas 4K (jika tersedia)</option>
+  </select>
+  <br>
+  <button onclick="downloadVideo()">Download</button>
   <div id="result"></div>
 
   <script>
-    async function download() {
-      const url = document.getElementById("url").value.trim();
-      if (!url) return alert("Masukkan URL dulu");
+    async function downloadVideo() {
+      const url = document.getElementById('url').value.trim();
+      const result = document.getElementById('result');
+      const quality = document.getElementById('quality').value;
+      result.innerHTML = '';
 
-      const result = document.getElementById("result");
-      result.innerHTML = "Sedang memproses...";
+      if (!url) {
+        alert('Masukkan URL dulu!');
+        return;
+      }
+
+      result.innerHTML = '<p>Sedang memproses, mohon tunggu...</p>';
 
       try {
-        // Gunakan API TikTok (misalnya tikwm.com)
-        const api = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
-        const data = await api.json();
-
-        if (!data.data || !data.data.play) {
-          result.innerHTML = "Gagal mendapatkan video 😢";
+        let apiUrl = '';
+        if (url.includes('tiktok.com')) {
+          apiUrl = `https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`;
+        } else if (url.includes('instagram.com')) {
+          apiUrl = `https://snapinsta.app/api/?url=${encodeURIComponent(url)}`;
+        } else {
+          result.innerHTML = '<p style="color:red">URL tidak dikenali. Harap masukkan link TikTok atau Instagram yang valid.</p>';
           return;
         }
 
-        const videoUrl = data.data.play;
+        const response = await fetch(apiUrl);
+        const data = await response.json();
+
+        let videoUrl = '';
+
+        // TikTok (HD & 4K)
+        if (data.data) {
+          if (quality === '4k' && data.data.hdplay) {
+            videoUrl = data.data.hdplay;
+          } else if (quality === 'hd' && data.data.play) {
+            videoUrl = data.data.play;
+          } else {
+            videoUrl = data.data.play || data.data.hdplay;
+          }
+        }
+
+        // Instagram fallback
+        if (!videoUrl && data.media && data.media[0]?.src) {
+          videoUrl = data.media[0].src;
+        }
+
+        if (!videoUrl) {
+          result.innerHTML = '<p style="color:red">Gagal mendapatkan video. Coba link lain atau turunkan kualitas.</p>';
+          return;
+        }
+
         result.innerHTML = `
-          <video controls width="320" src="${videoUrl}"></video><br>
-          <a href="${videoUrl}" download="video.mp4">Klik di sini untuk Download</a>
+          <video controls src="${videoUrl}"></video><br>
+          <a class="download-btn" href="${videoUrl}" download="video_${quality}.mp4">
+            Unduh Video ${quality.toUpperCase()}
+          </a>
         `;
       } catch (e) {
         console.error(e);
-        result.innerHTML = "Terjadi error: " + e.message;
+        result.innerHTML = '<p style="color:red">Terjadi kesalahan: ' + e.message + '</p>';
       }
     }
   </script>
