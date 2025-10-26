@@ -1,68 +1,48 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Downloader TikTok / Instagram</title>
-<style>
-body{font-family:system-ui,Segoe UI,Roboto,Arial;padding:20px;max-width:720px;margin:auto}
-input,button{padding:8px;font-size:16px}
-textarea{width:100%;height:120px}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TikTok & Instagram Downloader</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; margin-top: 50px; }
+    input, button { padding: 10px; width: 80%; max-width: 400px; }
+  </style>
 </head>
 <body>
-<h1>Downloader TikTok & Instagram (Public)</h1>
-<p>Tempelkan link posting/reel/TikTok lalu klik "Download".</p>
+  <h2>Downloader TikTok & Instagram</h2>
+  <input id="url" placeholder="Tempelkan link di sini" />
+  <button onclick="download()">Download</button>
+  <div id="result"></div>
 
+  <script>
+    async function download() {
+      const url = document.getElementById("url").value.trim();
+      if (!url) return alert("Masukkan URL dulu");
 
-<input id="url" placeholder="https://www.tiktok.com/xxx or https://www.instagram.com/reel/xxx" style="width:100%" />
-<div style="height:12px"></div>
-<button id="btn">Download</button>
-<p id="msg"></p>
+      const result = document.getElementById("result");
+      result.innerHTML = "Sedang memproses...";
 
+      try {
+        // Gunakan API TikTok (misalnya tikwm.com)
+        const api = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
+        const data = await api.json();
 
-<script>
-const btn = document.getElementById('btn');
-const urlInput = document.getElementById('url');
-const msg = document.getElementById('msg');
+        if (!data.data || !data.data.play) {
+          result.innerHTML = "Gagal mendapatkan video 😢";
+          return;
+        }
 
-
-btn.addEventListener('click', async () => {
-const url = urlInput.value.trim();
-if (!url) return alert('Masukkan URL');
-
-
-msg.textContent = 'Memproses...';
-try {
-const r = await fetch('/download', {
-method: 'POST',
-headers: {'Content-Type':'application/json'},
-body: JSON.stringify({ url })
-});
-
-
-if (!r.ok) {
-const j = await r.json().catch(()=>({error:'unknown'}));
-msg.textContent = 'Gagal: ' + (j.error || r.statusText);
-return;
-}
-
-
-// Response is a stream/file — create blob and download
-const blob = await r.blob();
-const filename = r.headers.get('Content-Disposition')?.match(/filename=\"?([^\";]+)\"?/)?.[1] || 'video.mp4';
-const a = document.createElement('a');
-a.href = URL.createObjectURL(blob);
-a.download = filename;
-document.body.appendChild(a);
-a.click();
-a.remove();
-msg.textContent = 'Selesai: file akan terunduh.';
-} catch (e) {
-console.error(e);
-msg.textContent = 'Error: ' + e.message;
-}
-});
-</script>
+        const videoUrl = data.data.play;
+        result.innerHTML = `
+          <video controls width="320" src="${videoUrl}"></video><br>
+          <a href="${videoUrl}" download="video.mp4">Klik di sini untuk Download</a>
+        `;
+      } catch (e) {
+        console.error(e);
+        result.innerHTML = "Terjadi error: " + e.message;
+      }
+    }
+  </script>
 </body>
 </html>
