@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Web Kamera Real-time - Deteksi Jari</title>
+  <style>
+    body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px;background:#111;color:#fff }
+    #container{position:relative;width:640px;max-width:95%;}
+    video, canvas{width:100%;height:auto;border-radius:8px;background:#000}
+    #message{font-size:1.25rem;padding:8px 12px;border-radius:8px;background:rgba(0,0,0,0.5);}
+    #status{font-size:0.9rem;opacity:0.8}
+    .hint{font-size:0.85rem;color:#cfcfcf}
+  </style>
+</head>
+<body>
+  <h2>Web Kamera Real-time — Deteksi Jumlah Jari</h2>
+  <div id="container">
+    <video id="video" playsinline></video>
+    <canvas id="overlay"></canvas>
+  </div>
+  <div id="message">Arahkan tangan ke kamera. Tunjukkan 1/2/3 jari.</div>
+  <div id="status">Menunggu kamera...</div>
+  <div class="hint">Catatan: Gunakan browser modern (Chrome/Edge/Firefox) dan izinkan akses kamera.</div>
+
+  <script type="module">
+    import { Hands } from 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646427220/hands.js';
+    import { Camera } from 'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.4.1646427220/camera_utils.js';
+    import { drawConnectors, drawLandmarks } from 'https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.4.1646427220/drawing_utils.js';
+
+    const videoElement = document.getElementById('video');
+    const canvasElement = document.getElementById('overlay');
+    const canvasCtx = canvasElement.getContext('2d');
+    const messageEl = document.getElementById('message');
+    const statusEl = document.getElementById('status');
+
+    // Resize canvas to match video size
+    function fitCanvas() {
+      canvasElement.width = videoElement.videoWidth;
+      canvasElement.height = videoElement.videoHeight;
+    }
+
+    // Hitungan sederhana: untuk setiap jari (index/middle/ring/pinky) bandingkan tip.y < pip.y
+    // Untuk ibu jari, bandingkan tip.x terhadap mcp.x berdasarkan tangan kiri/kanan
+    function countFingers(landmarks, handednessLabel) {
+      if (!landmarks) return 0;
+      // Indeks landmark yang penting
+      const TIP = { thumb:4, index:8, middle:12, ring:16, pinky:20 };
+      const PIP = { thumb:2, index:6, middle:10, ring:14, pinky:18 };
+
+      let count = 0;
+
+      // untuk 4 jari (index..pinky): tip.y < pip.y berarti terangkat (y ke bawah bertambah)
+      ['index','middle','ring','pinky'].forEach(name => {
+        const tip = landmarks[TIP[name]];
+        const pip = landmarks[PIP[name]];
+        if (tip && pip && tip.y < pip.y - 0.02) count++;
+      });
+
+      // ibu jari: periksa sumbu-x relatif terhadap mcp (landmark 2 atau 1)
+      const thumbTip = landmarks[TIP.thumb];
+      const thumbIp = landmarks[PIP.thumb];
+      const thumbMcp = landmarks[1];
+      if (thumbTip && thumbMcp) {
+        // handednessLabel biasanya 'Right' atau 'Left'
+        if (handednessLabel && handednessLabel.toLowerCase().includes('right')) {
+          // jika tangan kanan, ibu jari di sisi kiri dari mcp (nilai x lebih kecil)
+          if (thumbTip.x < thumbMcp.x - 0.03) count++;
+        } else if (handednessLabel && handednessLabel.toLowerCase().includes('left')) {
+          // untuk tangan kiri, ibu jari lebih besar dari mcp
+          if (thumbTip.x > thumbMcp.x + 0.03) count++;
+        } else {
+          // fallback: cek jarak absolut antara tip dan mcp di sumbu x
+          if (Math.abs(thumbTip.x - thumbMcp.x) > 0.05) count++;
+        }
+      }
+
+      return count;
+    }
+
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646427220/${file}`
+    });
+
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.6
+    });
+
+    hands.onResults((results) => {
+      if (!videoElement.videoWidth) return;
+      fitCanvas();
+      canvasCtx.save();
+      canvasCtx.clearRect(0,0,canvasElement.width,canvasElement.height);
+      // mirror the canvas to match video (optional but makes it intuitive)
+      canvasCtx.translate(canvasElement.width, 0);
+      canvasCtx.scale(-1, 1);
+
+      // draw video frame to canvas (semi-transparent)
+      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+        const handedness = (results.multiHandedness && results.multiHandedness[0] && results.multiHandedness[0].label) || '';
+
+        // draw annotations
+        drawConnectors(canvasCtx, landmarks, Hands.HAND_CONNECTIONS, {lineWidth:2});
+        drawLandmarks(canvasCtx, landmarks, {lineWidth:1});
+
+        const fingers = countFingers(landmarks, handedness);
+
+        let text = '';
+        if (fingers === 1) text = 'aku';
+        else if (fingers === 2) text = 'nama saya adril';
+        else if (fingers === 3) text = 'salam kenal';
+        else if (fingers === 0) text = '0 — tunjukkan 1/2/3 jari';
+        else text = `${fingers} jari`;
+
+        messageEl.textContent = text;
+        statusEl.textContent = `Terdeteksi tangan (${handedness}), jari: ${fingers}`;
+
+        // tampilkan teks besar di atas video
+        canvasCtx.font = '28px system-ui, Arial';
+        canvasCtx.fillStyle = 'rgba(0,0,0,0.6)';
+        canvasCtx.fillRect(10,10,260,44);
+        canvasCtx.fillStyle = '#fff';
+        canvasCtx.fillText(text, 18, 40);
+
+      } else {
+        messageEl.textContent = 'Tidak ada tangan terdeteksi — arahkan tangan ke kamera.';
+        statusEl.textContent = 'Menunggu tangan...';
+      }
+
+      canvasCtx.restore();
+    });
+
+    // set up camera
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await hands.send({image: videoElement});
+      },
+      width: 1280,
+      height: 720
+    });
+
+    async function startCamera() {
+      try {
+        await camera.start();
+        statusEl.textContent = 'Kamera aktif — arahkan tangan ke kamera.';
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'Gagal mengakses kamera: ' + err.message;
+      }
+    }
+
+    // When video stream becomes ready, resize canvas
+    videoElement.addEventListener('loadeddata', () => fitCanvas());
+
+    startCamera();
+  </script>
+</body>
+</html>
